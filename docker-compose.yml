@@ -1,0 +1,54 @@
+version: "3"
+
+services:
+  db:
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: "ssarangi"
+      POSTGRES_PASSWORD: "blastoff"
+
+  # Redis
+  redis:
+    image: redis:5.0.4
+    hostname: redis
+
+  # Django project for shiksha web
+  django:
+    build: "./shiksha_web"
+    command: python /code/manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/code
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+      - redis
+
+  # RabbitMQ
+  rabbit:
+    hostname: rabbit
+    image: rabbitmq:3.6.0
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=mypass
+    ports:
+      - "5672:5672" # we forward this port because it's useful for debugging
+      - "15672:15672" # here, we can access rabbitmq management plugin
+    depends_on:
+      - redis
+
+  # Celery worker
+  worker:
+    build:
+      context: .
+      dockerfile: ./shiksha_engine/Dockerfile
+    command: /code/run_celery.sh
+    volumes:
+      - ./shiksha_engine:/code
+    links:
+      - rabbit
+      - redis
+    depends_on:
+      - rabbit
